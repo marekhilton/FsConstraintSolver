@@ -210,7 +210,42 @@ let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a
                                            // ^ This might be improved? Will sometimes
                                            // recursive call on nodes that have already
                                            // been constrained by previous call.
+
+let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> list =
     
+    let connectedNodes graph collectedNodes node =
+        let rec connectedNodes' graph collectedNodes nodeLst =
+            match nodeLst with
+            | node::tl ->
+                let constrNodes =
+                    constrainingNodes graph node
+                let newGraph =
+                    Map.remove node graph
+                connectedNodes' newGraph (node::collectedNodes) (constrNodes @ tl)
+            | [] -> (graph, collectedNodes)
+        connectedNodes' graph [] [node]
+
+    let nodes =
+        Map.toList constrGraph
+        |> List.map (fun (a,_) -> a)
+    let rec splitGraph graph disjointLst =
+        Map.toList graph
+        |> List.map (fun (a,_) -> a)
+        |> function
+           | hd::tl -> connectedNodes graph [] hd
+                       |> function
+                          | newGraph , collectedNodes ->
+                              splitGraph newGraph (collectedNodes::disjointLst)
+           | []     -> disjointLst
+
+    let selectNodes graph nLst =
+        let folder map n =
+            Map.add n (Map.find n graph) map
+        List.fold folder Map.empty nLst
+    splitGraph constrGraph [[]]
+    |> List.map (selectNodes constrGraph) 
+
+// Tests
 let constrs =
     [
         (0,Eq 1)
