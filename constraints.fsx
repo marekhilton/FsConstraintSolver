@@ -27,6 +27,17 @@ let ConstrainingDomains graph nodeNums =
     |> List.map (fun n -> Map.find n graph
                           |> function
                              | dmn,_ -> dmn)
+// Finds nodes that constrain node [nodeNum]
+let constrainingNodes graph nodeNum =
+    let constraintArgs =
+        function
+        | Eq  x
+        | Neq x -> [x]
+        | Sum l -> l
+    Map.find nodeNum graph
+    |> function
+       | _,constrs -> Set.toList constrs
+    |> List.collect constraintArgs
 
 // ConstraintGraph type: each element of the map represents a node and its constraints
 // with respect to other nodes in the map. The first Set defines the the domain of values
