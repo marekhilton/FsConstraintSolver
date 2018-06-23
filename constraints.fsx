@@ -211,8 +211,11 @@ let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a
                                            // recursive call on nodes that have already
                                            // been constrained by previous call.
 
+// Splits graph into a list of disconnected graphs so they can be solved independently
 let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> list =
-    
+
+    // Finds all nodes connected to node returning the connected nodes
+    // and a graph with those nodes removed
     let connectedNodes graph collectedNodes node =
         let rec connectedNodes' graph collectedNodes nodeLst =
             match nodeLst with
@@ -225,9 +228,8 @@ let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> lis
             | [] -> (graph, collectedNodes)
         connectedNodes' graph [] [node]
 
-    let nodes =
-        Map.toList constrGraph
-        |> List.map (fun (a,_) -> a)
+    // Splits graph returning a list of lists. Each list contains the
+    // nodes in one connected graph
     let rec splitGraph graph disjointLst =
         Map.toList graph
         |> List.map (fun (a,_) -> a)
@@ -238,10 +240,14 @@ let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> lis
                               splitGraph newGraph (collectedNodes::disjointLst)
            | []     -> disjointLst
 
+    // Mapper to recreate a graph from a list of it's nodes and graph
+    // original graph
     let selectNodes graph nLst =
         let folder map n =
             Map.add n (Map.find n graph) map
         List.fold folder Map.empty nLst
+
+    // Body of function
     splitGraph constrGraph [[]]
     |> List.map (selectNodes constrGraph) 
 
