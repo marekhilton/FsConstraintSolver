@@ -59,20 +59,6 @@ let setDomain graph n domain =
     | Some (_, constrSet) -> (domain, constrSet)
     | None                -> (domain, Set.empty)
     |> (fun node -> Map.add n node graph)
-// Sets the domain of a node. If the domain is unchanged then it returns None
-let trySetDomain graph n domain =
-    match Map.tryFind n graph with
-    | Some (oldDomain, constrSet) ->
-        if oldDomain <> domain
-        then Map.add n (domain, constrSet) graph
-             |> Some
-        else None
-    | None ->
-        failwithf "Node %d doesn't exist" n
-// Removes a value from the value domain of a node (if it exists)
-let remFromDomain domainEl node =
-    match node with
-    | domain, constrSet -> (Set.remove domainEl domain, constrSet)
 
 // Builds a ConstraintGraph type from a list of constraints (constrs)
 // and an ordered list of domains for nodes in the graph (nodeDomains)
