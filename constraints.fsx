@@ -258,10 +258,11 @@ let constrs =
     ]
 
 let binaryDomain = Set.ofList [0;1]
-let nodeDomains = List.replicate 3 binaryDomain
+let nodeDomains = List.replicate 4 binaryDomain
 
 let graph = constraintGraphBuild constrs nodeDomains
             |> function
                | Ok g -> g
                | Error str -> failwithf "%s" str
 let test = setDomain graph 0 (Set.ofList [0])
+let result = makeArcConsistent test 0;;
