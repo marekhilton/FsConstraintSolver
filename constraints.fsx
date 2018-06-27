@@ -194,6 +194,8 @@ and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
     ||> intersectDomains                     // Combine into one unary constraint map.
     |> Map.fold setDomainArcConsistent graph // Update graph with unary constraints.
                                              // This recursively call arc constraints.
+                                             // This fold could be improved to reduce
+                                             // superfluous operations?
 
 
 // Splits graph into a list of disconnected graphs so they can be solved independently
