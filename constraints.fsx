@@ -49,12 +49,12 @@ type ConstraintGraph<'a when 'a:comparison> =
     Map<int,Node<'a>>
 
 // Adds a constraint to the constraint map of a node
-let addConstraintToNode constr (node:Node<'a>):Node<'a> =
+let addConstraintToNode constr node =
     match node with
     | dmn, constrSet -> Set.add constr constrSet
                         |> fun c -> (dmn , c)
 // Sets the domain of the value of a node
-let setDomain graph (n:int) domain =
+let setDomain graph n domain =
     match Map.tryFind n graph with
     | Some (_, constrSet) -> (domain, constrSet)
     | None                -> (domain, Set.empty)
