@@ -152,10 +152,19 @@ let unaryFromBinaryConstr domain graph constrPred constrNode =
     Map.find constrNode graph
     |> function
        | dmn,_ -> (constrNode,  Set.filter constrPred dmn)
-
+       
+let rec setDomainArcConsistent  graph n domain =
+    match Map.tryFind n graph with
+    | Some (oldDomain, constrSet) ->
+        if oldDomain <> domain
+        then Map.add n (Set.intersect oldDomain domain, constrSet) graph
+             |> (fun g -> makeArcConsistent g n)
+        else graph
+    | None ->
+        failwithf "Node %d doesn't exist" n
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
-let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
+and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
     // Combines unary constraints from two domain maps, m1 and m2
     let intersectDomainMaps m1 m2 =
         let folder acc n dmn  =
@@ -187,14 +196,6 @@ let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a
             | NConstraint constrAndNode -> binary, constrAndNode::nary
             | _                         -> failwith "huh?"
         Set.fold folder ([],[]) cSet
-    // Folder function to fold into a tuple of the graph updated with unary constraints
-    // and a list of nodes whose domains have been altered (Guides the function in whether
-    // to continue recursing)
-    let folderSetDomain (cGraph,nodeLst) n newDomain =
-        trySetDomain cGraph n newDomain
-        |> function
-           | Some g -> (g, n::nodeLst)
-           | None   -> (cGraph,nodeLst)
            
     constrSet
     |> segregateConstraints             // Separate binary and N-ary constraints.
@@ -204,12 +205,10 @@ let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a
             ,
             List.map ((<||) (unaryFromNaryConstr domain graph)) nLst
             |> List.fold intersectDomainMaps Map.empty 
-    ||> intersectDomains                   // Combine into one unary constraint map.
-    |> Map.fold folderSetDomain (graph,[]) // Update graph with unary constraints.
-    ||> List.fold makeArcConsistent        // Recurse over nodes that changed.
-                                           // ^ This might be improved? Will sometimes
-                                           // recursive call on nodes that have already
-                                           // been constrained by previous call.
+    ||> intersectDomains                     // Combine into one unary constraint map.
+    |> Map.fold setDomainArcConsistent graph // Update graph with unary constraints.
+                                             // This recursively call arc constraints.
+
 
 // Splits graph into a list of disconnected graphs so they can be solved independently
 let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> list =
