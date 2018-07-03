@@ -238,6 +238,55 @@ let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> lis
     splitGraph constrGraph [[]]
     |> List.map (selectNodes constrGraph) 
 
+// Backtracking search with arc consistency check.
+// Only looks for a single solution.
+let backtrackingSearch constraintGraph =
+
+    // Recursive search function.
+    let rec search nodeLst graph =
+
+        // Checks for empty domains in a graph (unsatisfiable graph).
+        // Returns Some if graph is satisfiable
+        let emptyDomainCheck g =
+            match Map.exists (fun _ (dmn,_) -> Set.isEmpty dmn) g with
+            | true  -> None
+            | false -> Some g
+
+        // Sets a node's domain to a single value and checks arc
+        // consistency.
+        let setDomainSingleton g n value =
+            setDomainArcConsistent g n (Set.singleton value)
+
+        // Folding function to fold through node's domain.
+        // If state is None then no solution for this node has yet been found.
+        // Else a solution has been found and the result is passed through
+        let folder n tl option value =
+            match option with
+            | None ->
+                setDomainSingleton graph n value
+                |> emptyDomainCheck
+                |> function
+                   | Some g -> search tl g
+                   | None   -> None
+            | Some _ -> option
+
+        // Fold through domain of current node.
+        // If no more nodes to be explored then return completed graph.
+        match nodeLst with
+        | n::tl -> match Map.find n graph with
+                   | dmn,_ -> Set.fold (folder n tl) None dmn
+        | []    -> Some graph
+
+    // All node numbers in graph
+    let nodes =
+        Map.toList constraintGraph
+        |> List.map (fun (a,b) -> a)
+
+    // Search graph
+    search nodes constraintGraph
+    
+      
+
 // Tests
 let constrs =
     [
