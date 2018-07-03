@@ -303,3 +303,4 @@ let graph = constraintGraphBuild constrs nodeDomains
                | Error str -> failwithf "%s" str
 let test = setDomain graph 0 (Set.ofList [0])
 let result = makeArcConsistent test 0;;
+let result2 = backtrackingSearch graph;;
