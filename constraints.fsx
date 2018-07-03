@@ -5,6 +5,7 @@ type Constraint =
     | Eq  of int
     | Neq of int
     | Sum of int list
+    
 // BinaryConstraint is an incomplete active pattern match. Supplying a domain (set) to
 // creates a partial active pattern match which returns the constraint predicate and node
 // for a binary constraint.
@@ -21,12 +22,14 @@ let (|NaryConstraint|_|) constrainedDomain =
     function
     | Sum l -> ((fun argLst -> Set.contains (List.reduce (+) argLst) constrainedDomain),l) |> Some
     | _     -> None
+    
 // Returns a list of domains associated with the given nodes
 let ConstrainingDomains graph nodeNums =
     nodeNums
     |> List.map (fun n -> Map.find n graph
                           |> function
                              | dmn,_ -> dmn)
+    
 // Finds nodes that constrain node [nodeNum]
 let constrainingNodes graph nodeNum =
     let constraintArgs =
@@ -53,6 +56,7 @@ let addConstraintToNode constr node =
     match node with
     | dmn, constrSet -> Set.add constr constrSet
                         |> fun c -> (dmn , c)
+                        
 // Sets the domain of the value of a node
 let setDomain graph n domain =
     match Map.tryFind n graph with
@@ -114,6 +118,7 @@ let unaryFromNaryConstr domain graph constrPred constrNodes =
         | [] -> failwith "huh?"
         | []::x -> [] 
         | hd::tl -> (List.map List.head lst) :: listTranspose (List.map List.tail lst)
+        
     // Function to combine a list of allowable domains into a map
     let mergeDomains nodeLst domains =
         let folder acc n dmn =
@@ -148,6 +153,7 @@ let rec setDomainArcConsistent  graph n domain =
         else graph
     | None ->
         failwithf "Node %d doesn't exist" n
+    
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
 and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
@@ -159,6 +165,7 @@ and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
             | None        -> dmn
             |> (fun d -> Map.add n d acc)
         Map.fold folder m1 m2
+        
     // Updates domainMap with unary constraints from domainLst
     let intersectDomains domainLst domainMap =
         let folder map (n,dmn) =
@@ -167,13 +174,16 @@ and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
             | None           -> dmn
             |> (fun d -> Map.add n d map)
         List.fold folder domainMap domainLst
+        
     // Get head node's domain and constraints
     let (domain,constrSet) =
         match Map.find nodeNum graph  with
         | dmn,constrs -> dmn, constrs
+        
     // Complete partial active pattern matches with head node's domain
     let (|BConstraint|_|),(|NConstraint|_|) =
         (|BinaryConstraint|_|) domain, (|NaryConstraint|_|) domain
+        
     // Split binary and N-ary constraints into two lists
     let segregateConstraints cSet =
         let folder (binary,nary) el =
