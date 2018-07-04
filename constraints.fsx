@@ -143,7 +143,9 @@ let unaryFromBinaryConstr domain graph constrPred constrNode =
     Map.find constrNode graph
     |> function
        | dmn,_ -> (constrNode,  Set.filter constrPred dmn)
-       
+
+// Sets a domain and then checks arc consistency on that node.
+// This is mutually recursive with makeArcConsistent.
 let rec setDomainArcConsistent  graph n domain =
     match Map.tryFind n graph with
     | Some (oldDomain, constrSet) ->
