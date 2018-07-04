@@ -294,8 +294,6 @@ let backtrackingSearch constraintGraph =
 
     // Search graph
     search nodes constraintGraph
-    
-      
 
 // +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 // |0    |1    |2    |3    |4    |5    |6    |7    |8    |
@@ -318,27 +316,36 @@ let backtrackingSearch constraintGraph =
 // +-----+-----+-----+-----+-----+-----+-----+-----+-----+
 
 let buildSudokuConstraints() =
-    let modulo = 81
-    let rowModulo = 9
+
+    // Rows in which nodes cannot be equal
     let rows =
         [0 .. 9 .. 72]
         |> List.map (fun n -> List.map ((+) n) [0..8])
+
+    // Columns in which nodes cannot be equal
     let columns =
         [0..8]
         |> List.map (fun n -> List.map ((+) n) [0 .. 9 .. 72])
+
+    // Ninths in which nodes cannot be equal
     let ninths =
         [0 .. 3 ..6]
         |> List.collect (fun n -> List.map ((+) n) [0;27;54])
         |> List.map (fun n -> List.map ((+) n) [0;1;2;9;10;11;18;19;20])
+
+    // Default domains
     let domains =
         Set.ofList [1..9]
         |> List.replicate 81
+
+    // Generate constraints
     let constrs =
         rows @ columns @ ninths
         |> List.collect (fun l -> List.allPairs l l)
         |> List.filter (fun (a,b) -> a <> b)
         |> List.map (fun (a,b) -> (a, Neq b))
-        
+
+    // Build and get result
     constraintGraphBuild constrs domains
     |> function
        | Ok    x   -> x
@@ -363,3 +370,18 @@ let graph = constraintGraphBuild constrs nodeDomains
 let test = setDomain graph 0 (Set.ofList [0])
 let result = makeArcConsistent test 0;;
 let result2 = backtrackingSearch graph;;
+let sudoku = buildSudokuConstraints();;
+let solution =
+    let printByLine n lst =
+        List.chunkBySize n lst
+        |> List.map (sprintf "%A")
+        |> String.concat "\n"
+    
+    backtrackingSearch sudoku
+    |> function
+       | Some x ->
+           Map.map (fun n (dmn,_) -> Set.toList dmn |> List.exactlyOne) x
+           |> (fun map -> List.map (fun n -> Map.find n map) [0..80])
+           |> printByLine 9
+           |> printfn "%A"
+       | None   -> failwith "huh?"
