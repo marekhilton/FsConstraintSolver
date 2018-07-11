@@ -166,19 +166,22 @@ let unaryFromBinaryConstr domain graph constrPred constrNode =
 // nodeCheckFunc to update check for a valid solution (e.g. a simple
 // constraint check) and/or update the graph (e.g. an arc consistency
 // check).
-let setDomainAndCheck nodeCheckFunc graph n domain =
-    match Map.tryFind n graph with
-    | Some (oldDomain, constrSet) ->
-        if oldDomain <> domain
-        then Map.add n (Set.intersect oldDomain domain, constrSet) graph
-             |> (fun g -> nodeCheckFunc g n)
-        else graph
-    | None ->
-        failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
+let setDomainAndCheck nodeCheckFunc graphOption n domain =
+    match graphOption with
+    | Some graph ->
+        match Map.tryFind n graph with
+        | Some (oldDomain, constrSet) ->
+            if oldDomain <> domain
+            then Map.add n (Set.intersect oldDomain domain, constrSet) graph
+                |> (fun g -> nodeCheckFunc n g)
+            else Some graph
+        | None ->
+            failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
+    | None -> None
     
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
-let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
+let rec makeArcConsistent nodeNum graph:ConstraintGraph<'a> Option =
     // Combines unary constraints from two domain maps, m1 and m2
     let intersectDomainMaps m1 m2 =
         let folder acc n dmn  =
@@ -224,7 +227,12 @@ let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a
             List.map ((<||) (unaryFromNaryConstr domain graph)) nLst
             |> List.fold intersectDomainMaps Map.empty 
     ||> intersectDomains                     // Combine into one unary constraint map.
-    |> Map.fold (setDomainAndCheck makeArcConsistent) graph // Update graph with unary constraints.
+    |> fun unaryConstraints ->
+        if Map.exists (fun _ dmn -> Set.isEmpty dmn) unaryConstraints
+        then None
+        else unaryConstraints
+             |> Map.fold (setDomainAndCheck makeArcConsistent) (Some graph)
+                                             // Update graph with unary constraints.
                                              // This recursively call arc constraints.
                                              // This fold could be improved to reduce
                                              // superfluous operations?
@@ -287,7 +295,7 @@ let backtrackingSearch constraintGraph =
         // Sets a node's domain to a single value and checks arc
         // consistency.
         let setDomainSingleton g n value =
-            setDomainAndCheck makeArcConsistent g n (Set.singleton value)
+            setDomainAndCheck makeArcConsistent (Some g) n (Set.singleton value)
 
         // Folding function to fold through node's domain.
         // If state is None then no solution for this node has yet been found.
@@ -296,7 +304,6 @@ let backtrackingSearch constraintGraph =
             match option with
             | None ->
                 setDomainSingleton graph n value
-                |> emptyDomainCheck
                 |> function
                    | Some g -> search tl g
                    | None   -> None
