@@ -7,6 +7,25 @@ type Constraint =
     | Sum of int list
 
 // Function to create a partial pattern match which returns a
+// predicate constraining the head node of a binary constraint.
+let binaryHeadConstraint constraintGraph =
+    function
+    | Eq  x -> Map.find x constraintGraph
+               |> (=)  |> Some
+    | Neq x -> Map.find x constraintGraph
+               |> (<>) |> Some
+    | _     -> None
+
+// Function to create a partial pattern match which returns a
+// predicate constraining the head node of an N-ary constraint.
+let naryHeadConstraint constraintGraph =
+    function
+    | Sum l -> List.map (fun n -> Map.find n constraintGraph) l
+               |> List.reduce (+)
+               |> (=) |> Some
+    | _     -> None
+
+// Function to create a partial pattern match which returns a
 // predicate constraining the tail node in a binary constraint
 let binaryTailConstraint constrainedDomain =
     function
