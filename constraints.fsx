@@ -37,7 +37,8 @@ let binaryTailConstraint constrainedDomain =
 // predicate constraining the tail nodes of an N-ary constraint.
 let naryTailConstraint constrainedDomain =
     function
-    | Sum l -> ((fun argLst -> Set.contains (List.reduce (+) argLst) constrainedDomain),l) |> Some
+    | Sum l -> ((fun argLst -> Set.contains (List.reduce (+) argLst) constrainedDomain),l)
+               |> Some
     | _     -> None
     
 // Returns a list of domains associated with the given nodes
