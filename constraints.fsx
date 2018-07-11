@@ -162,21 +162,23 @@ let unaryFromBinaryConstr domain graph constrPred constrNode =
     |> function
        | dmn,_ -> (constrNode,  Set.filter constrPred dmn)
 
-// Sets a domain and then checks arc consistency on that node.
-// This is mutually recursive with makeArcConsistent.
-let rec setDomainArcConsistent  graph n domain =
+// Function to set domain of a node.  This function employs a
+// nodeCheckFunc to update check for a valid solution (e.g. a simple
+// constraint check) and/or update the graph (e.g. an arc consistency
+// check).
+let setDomainAndCheck nodeCheckFunc graph n domain =
     match Map.tryFind n graph with
     | Some (oldDomain, constrSet) ->
         if oldDomain <> domain
         then Map.add n (Set.intersect oldDomain domain, constrSet) graph
-             |> (fun g -> makeArcConsistent g n)
+             |> (fun g -> nodeCheckFunc g n)
         else graph
     | None ->
-        failwithf "Node %d doesn't exist" n
+        failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
     
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
-and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
+let rec makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
     // Combines unary constraints from two domain maps, m1 and m2
     let intersectDomainMaps m1 m2 =
         let folder acc n dmn  =
@@ -222,7 +224,7 @@ and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
             List.map ((<||) (unaryFromNaryConstr domain graph)) nLst
             |> List.fold intersectDomainMaps Map.empty 
     ||> intersectDomains                     // Combine into one unary constraint map.
-    |> Map.fold setDomainArcConsistent graph // Update graph with unary constraints.
+    |> Map.fold (setDomainAndCheck makeArcConsistent) graph // Update graph with unary constraints.
                                              // This recursively call arc constraints.
                                              // This fold could be improved to reduce
                                              // superfluous operations?
@@ -285,7 +287,7 @@ let backtrackingSearch constraintGraph =
         // Sets a node's domain to a single value and checks arc
         // consistency.
         let setDomainSingleton g n value =
-            setDomainArcConsistent g n (Set.singleton value)
+            setDomainAndCheck makeArcConsistent g n (Set.singleton value)
 
         // Folding function to fold through node's domain.
         // If state is None then no solution for this node has yet been found.
