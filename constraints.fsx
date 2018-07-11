@@ -390,8 +390,6 @@ let graph = constraintGraphBuild constrs nodeDomains
                | Ok g -> g
                | Error str -> failwithf "%s" str
 let test = setDomain graph 0 (Set.ofList [0])
-let result = makeArcConsistent test 0;;
-let result2 = backtrackingSearch graph;;
 let sudoku = buildSudokuConstraints();;
 let solution =
     let printByLine n lst =
