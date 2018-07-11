@@ -181,7 +181,7 @@ let setDomainAndCheck nodeCheckFunc graphOption n domain =
     
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
-let rec makeArcConsistent nodeNum graph:ConstraintGraph<'a> Option =
+let rec makeArcConsistent nodeNum graph =
     // Combines unary constraints from two domain maps, m1 and m2
     let intersectDomainMaps m1 m2 =
         let folder acc n dmn  =
@@ -284,14 +284,7 @@ let backtrackingSearch constraintGraph =
 
     // Recursive search function.
     let rec search nodeLst graph =
-
-        // Checks for empty domains in a graph (unsatisfiable graph).
-        // Returns Some if graph is satisfiable
-        let emptyDomainCheck g =
-            match Map.exists (fun _ (dmn,_) -> Set.isEmpty dmn) g with
-            | true  -> None
-            | false -> Some g
-
+        
         // Sets a node's domain to a single value and checks arc
         // consistency.
         let setDomainSingleton g n value =
