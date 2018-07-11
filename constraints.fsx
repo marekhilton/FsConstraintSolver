@@ -173,7 +173,7 @@ let setDomainAndCheck nodeCheckFunc graphOption n domain =
         | Some (oldDomain, constrSet) ->
             if oldDomain <> domain
             then Map.add n (Set.intersect oldDomain domain, constrSet) graph
-                |> (fun g -> nodeCheckFunc n g)
+                |> nodeCheckFunc n
             else Some graph
         | None ->
             failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
