@@ -5,20 +5,18 @@ type Constraint =
     | Eq  of int
     | Neq of int
     | Sum of int list
-    
-// BinaryConstraint is an incomplete active pattern match. Supplying a domain (set) to
-// creates a partial active pattern match which returns the constraint predicate and node
-// for a binary constraint.
-let (|BinaryConstraint|_|) constrainedDomain =
+
+// Function to create a partial pattern match which returns a
+// predicate constraining the tail node in a binary constraint
+let binaryTailConstraint constrainedDomain =
     function
     | Eq  x -> ((fun value -> Set.contains value constrainedDomain),x) |> Some
     | Neq x -> ((fun value -> Set.exists ((<>) value) constrainedDomain),x) |> Some
     | _     -> None
     
-// BinaryConstraint is an incomplete active pattern match. Supplying a domain (set) to
-// creates a partial active pattern match which returns the constraint predicate and nodes
-// for a N-ary constraint.
-let (|NaryConstraint|_|) constrainedDomain =
+// Function to create a partial pattern match which returns a
+// predicate constraining the tail nodes of an N-ary constraint.
+let naryTailConstraint constrainedDomain =
     function
     | Sum l -> ((fun argLst -> Set.contains (List.reduce (+) argLst) constrainedDomain),l) |> Some
     | _     -> None
@@ -184,7 +182,7 @@ and makeArcConsistent (graph:ConstraintGraph<'a>) nodeNum:ConstraintGraph<'a> =
         
     // Complete partial active pattern matches with head node's domain
     let (|BConstraint|_|),(|NConstraint|_|) =
-        (|BinaryConstraint|_|) domain, (|NaryConstraint|_|) domain
+        binaryTailConstraint domain, naryTailConstraint domain
         
     // Split binary and N-ary constraints into two lists
     let segregateConstraints cSet =
