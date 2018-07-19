@@ -19,19 +19,30 @@ let choiceFromDomains dmnLst =
 // predicate constraining the head node of a binary constraint.
 let binaryHeadConstraint constraintGraph =
     function
-    | Eq  x -> Map.find x constraintGraph
-               |> (=)  |> Some
-    | Neq x -> Map.find x constraintGraph
-               |> (<>) |> Some
+    | Eq  x -> match Map.tryFind x constraintGraph with
+               | Some (dmn,_) ->
+                   Some (fun headVal -> Set.exists ((=) headVal) dmn)
+               | None         ->
+                   failwithf "Node %d does not exist" x
+    | Neq x -> match Map.tryFind x constraintGraph with
+               | Some (dmn,_) ->
+                   Some (fun headVal -> Set.exists ((<>) headVal) dmn)
+               | None         ->
+                   failwithf "Node %d does not exist" x
     | _     -> None
 
 // Function to create a partial pattern match which returns a
 // predicate constraining the head node of an N-ary constraint.
 let naryHeadConstraint constraintGraph =
     function
-    | Sum l -> List.map (fun n -> Map.find n constraintGraph) l
-               |> List.reduce (+)
-               |> (=) |> Some
+    | Sum l -> let dmnChoice =
+                   List.map (fun n -> match Map.tryFind n constraintGraph with
+                                      | Some (dmn,_) -> dmn
+                                      | None         -> failwith "Node doesn't exist") l
+                   |> choiceFromDomains
+               fun headVal -> List.exists (fun l -> List.reduce (+) l
+                                                    |> (=) headVal) dmnChoice
+               |> Some
     | _     -> None
 
 // Function to create a partial pattern match which returns a
