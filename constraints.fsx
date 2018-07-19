@@ -6,6 +6,15 @@ type Constraint =
     | Neq of int
     | Sum of int list
 
+//Gives all choices for a list of domains
+let choiceFromDomains dmnLst =
+    let folder acc el =
+        Set.toList el
+        |> List.allPairs acc
+        |> List.map (fun (a,b)->b::a)
+    List.fold folder [[]] dmnLst
+    |> List.map List.rev                //The lists must be reversed to respect argument order
+
 // Function to create a partial pattern match which returns a
 // predicate constraining the head node of a binary constraint.
 let binaryHeadConstraint constraintGraph =
@@ -117,15 +126,6 @@ let constraintGraphBuild constrs nodeDomains =
     if enoughDomains
     then buildGraph() |> Ok
     else Error "Not enough node domains"
-
-//Gives all choices for a list of domains
-let choiceFromDomains dmnLst =
-    let folder acc el =
-        Set.toList el
-        |> List.allPairs acc
-        |> List.map (fun (a,b)->b::a)
-    List.fold folder [[]] dmnLst
-    |> List.map List.rev                //The lists must be reversed to respect argument order
 
 // Returns allowable domains for tail nodes based off a predicate representing an N-ary
 // constraint
