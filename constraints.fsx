@@ -178,6 +178,24 @@ let setDomainAndCheck nodeCheckFunc graphOption n domain =
         | None ->
             failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
     | None -> None
+
+let checkNodeConstraints nodeNum graph =
+    let (domain,constrSet) =
+        match Map.tryFind nodeNum graph with
+        | Some (dmn,constrs) -> dmn, constrs
+        | None -> failwithf "checkNodeConstraints:: Node %d doesn't exist" nodeNum
+
+    let getConstraint = headConstraint graph
+
+    match Map.tryFind nodeNum graph with
+    | Some (dmn,constrSet) ->
+        Set.toList constrSet
+        |> List.map getConstraint
+        |> fun predLst -> Set.exists (fun value -> List.forall ((|>) value) predLst) dmn
+        |> function
+        | true  -> Some graph
+        | false -> None
+    | None -> failwithf "checkNodeConstraints:: Node %d does not exist" nodeNum
     
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
 // constraints with different functions.
