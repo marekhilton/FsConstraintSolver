@@ -298,7 +298,7 @@ let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> lis
 
 // Backtracking search with arc consistency check.
 // Only looks for a single solution.
-let backtrackingSearch constraintGraph =
+let backtrackingSearch constraintFuncCheck constraintGraph =
 
     // Recursive search function.
     let rec search nodeLst graph =
@@ -306,7 +306,7 @@ let backtrackingSearch constraintGraph =
         // Sets a node's domain to a single value and checks arc
         // consistency.
         let setDomainSingleton g n value =
-            setDomainAndCheck makeArcConsistent (Some g) n (Set.singleton value)
+            setDomainAndCheck constraintFuncCheck (Some g) n (Set.singleton value)
 
         // Folding function to fold through node's domain.
         // If state is None then no solution for this node has yet been found.
@@ -415,7 +415,7 @@ let solution =
         |> List.map (sprintf "%A")
         |> String.concat "\n"
     
-    backtrackingSearch sudoku
+    backtrackingSearch makeArcConsistent sudoku
     |> function
        | Some x ->
            Map.map (fun n (dmn,_) -> Set.toList dmn |> List.exactlyOne) x
