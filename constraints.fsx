@@ -198,7 +198,7 @@ let checkNodeConstraints nodeNum graph =
     | None -> failwithf "checkNodeConstraints:: Node %d does not exist" nodeNum
     
 // Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
-// constraints with different functions.
+// constraints.
 let rec makeArcConsistent nodeNum graph =
     // Combines unary constraints from two domain maps, m1 and m2
     let intersectDomainMaps m1 m2 =
