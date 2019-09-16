@@ -6,6 +6,25 @@ type Constraint =
     | Neq of int
     | Sum of int list
 
+// ConstraintGraph type: each element of the map represents a node and its constraints
+// with respect to other nodes in the map. The first Set defines the the domain of values
+// the node can take and the Constraint Set is a Set of all the constraints placed on the
+// node.
+type Node<'a when 'a:comparison> =
+    ('a Set * Constraint Set)
+type ConstraintGraph<'a when 'a:comparison> =
+    Map<int,Node<'a>>
+
+type NodeCheckFunc<'a when 'a:comparison> =
+    int -> ConstraintGraph<'a> -> ConstraintGraph<'a> option
+type ConstraintCheckFunc<'a when 'a:comparison> =
+    int -> ConstraintGraph<'a> -> ConstraintGraph<'a> option
+type Logger<'a when 'a:comparison> =
+    | SetDomainAndCheckFunc of NodeCheckFunc<'a> * ConstraintGraph<'a> option * int * Set<'a>
+    | SearchFunc of ConstraintCheckFunc<'a> * ConstraintGraph<'a>
+
+
+
 //Gives all choices for a list of domains
 let choiceFromDomains dmnLst =
     let folder acc el =
@@ -68,15 +87,6 @@ let constrainingNodes graph nodeNum =
     | Some (_,constrs) -> Set.toList constrs
                           |> List.collect constraintArgs
     | None -> []
-
-// ConstraintGraph type: each element of the map represents a node and its constraints
-// with respect to other nodes in the map. The first Set defines the the domain of values
-// the node can take and the Constraint Set is a Set of all the constraints placed on the
-// node.
-type Node<'a when 'a:comparison> =
-    ('a Set * Constraint Set)
-type ConstraintGraph<'a when 'a:comparison> =
-    Map<int,Node<'a>>
 
 // Adds a constraint to the constraint map of a node
 let addConstraintToNode constr node =
@@ -393,29 +403,72 @@ let buildSudokuConstraints() =
 
 
 
-// Tests
-let constrs =
-    [
-        (0,Eq 1)
-        (1,Neq 2)
-    ]
+// // Tests
+// let constrs =
+//     [
+//         (0,Eq 1)
+//         (1,Neq 2)
+//     ]
 
-let binaryDomain = Set.ofList [0;1]
-let nodeDomains = List.replicate 4 binaryDomain
+// let binaryDomain = Set.ofList [0;1]
+// let nodeDomains = List.replicate 4 binaryDomain
 
-let graph = constraintGraphBuild constrs nodeDomains
-            |> function
-               | Ok g -> g
-               | Error str -> failwithf "%s" str
-let test = setDomain graph 0 (Set.ofList [0])
+// let graph = constraintGraphBuild constrs nodeDomains
+//             |> function
+//                | Ok g -> g
+//                | Error str -> failwithf "%s" str
+// let test = setDomain graph 0 (Set.ofList [0])
 let sudoku = buildSudokuConstraints();;
+// let solution =
+//     let printByLine n lst =
+//         List.chunkBySize n lst
+//         |> List.map (sprintf "%A")
+//         |> String.concat "\n"
+    
+//     backtrackingSearch makeArcConsistent sudoku
+//     |> function
+//        | Some x ->
+//            Map.map (fun n (dmn,_) -> Set.toList dmn |> List.exactlyOne) x
+//            |> (fun map -> List.map (fun n -> Map.find n map) [0..80])
+//            |> printByLine 9
+//            |> printfn "%A"
+//        | None   -> failwith "huh?"
+
+let domains =
+    // [2;5;6; 0;1;0; 7;0;0
+    //  9;8;1; 3;6;0; 0;0;5
+    //  0;0;4; 0;2;0; 0;0;0
+
+    //  3;0;9; 0;0;6; 0;0;0
+    //  0;0;2; 0;0;0; 1;0;0
+    //  0;0;0; 7;0;0; 0;0;9
+
+    //  0;0;0; 0;4;0; 9;0;0
+    //  1;0;0; 0;7;9; 3;6;4
+    //  0;0;7; 0;3;0; 5;8;2]
+    [0;9;0; 0;3;0; 0;4;0
+     2;8;0; 0;0;5; 0;6;7
+     0;0;6; 4;0;0; 1;0;0
+
+     0;6;9; 2;0;3; 0;5;8
+     8;0;5; 0;0;6; 4;0;0
+     0;3;0; 5;0;0; 0;1;0
+
+     6;0;0; 0;0;2; 9;0;1
+     9;0;3; 7;0;0; 0;8;0
+     0;5;0; 0;6;9; 0;0;4]
+    |> List.map ((function 0 -> [1..9] | x -> [x]) >> Set.ofList)
+    |> List.indexed
+
+let test2 =
+    List.fold (fun acc (i,dm) -> setDomain acc i dm) sudoku domains
 let solution =
     let printByLine n lst =
         List.chunkBySize n lst
         |> List.map (sprintf "%A")
         |> String.concat "\n"
     
-    backtrackingSearch makeArcConsistent sudoku
+    backtrackingSearch makeArcConsistent test2
     |> function
        | Some x ->
            Map.map (fun n (dmn,_) -> Set.toList dmn |> List.exactlyOne) x
