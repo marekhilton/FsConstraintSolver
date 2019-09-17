@@ -344,5 +344,11 @@ let backtrackingSearch constraintFuncCheck constraintGraph =
         Map.toList constraintGraph
         |> List.map (fun (a,b) -> a)
 
+    let initialGraphCheck graph =
+        let folder gOpt nodeNum =
+            Option.bind (makeArcConsistent nodeNum) gOpt
+        List.fold folder (Some graph) nodes
+        
     // Search graph
-    search nodes constraintGraph
+    initialGraphCheck constraintGraph
+    |> Option.bind (search nodes)
