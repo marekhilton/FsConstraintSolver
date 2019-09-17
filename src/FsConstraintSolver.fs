@@ -1,0 +1,348 @@
+module FsConstraintSolver
+
+// Constraint type.
+// The label denotes type.
+// The right hand side denotes the tail nodes
+type Constraint =
+    | Eq  of int
+    | Neq of int
+    | Sum of int list
+
+// ConstraintGraph type: each element of the map represents a node and its constraints
+// with respect to other nodes in the map. The first Set defines the the domain of values
+// the node can take and the Constraint Set is a Set of all the constraints placed on the
+// node.
+type Node<'a when 'a:comparison> =
+    ('a Set * Constraint Set)
+type ConstraintGraph<'a when 'a:comparison> =
+    Map<int,Node<'a>>
+
+type NodeCheckFunc<'a when 'a:comparison> =
+    int -> ConstraintGraph<'a> -> ConstraintGraph<'a> option
+type ConstraintCheckFunc<'a when 'a:comparison> =
+    int -> ConstraintGraph<'a> -> ConstraintGraph<'a> option
+type Logger<'a when 'a:comparison> =
+    | SetDomainAndCheckFunc of NodeCheckFunc<'a> * ConstraintGraph<'a> option * int * Set<'a>
+    | SearchFunc of ConstraintCheckFunc<'a> * ConstraintGraph<'a>
+
+
+
+//Gives all choices for a list of domains
+let choiceFromDomains dmnLst =
+    let folder acc el =
+        Set.toList el
+        |> List.allPairs acc
+        |> List.map (fun (a,b)->b::a)
+    List.fold folder [[]] dmnLst
+    |> List.map List.rev                //The lists must be reversed to respect argument order
+
+
+// Function to create a partial pattern match which returns a
+// predicate constraining the head node of a constraint.
+let headConstraint constraintGraph =
+    let constructBinaryHeadConstraint func n =
+        match Map.tryFind n constraintGraph with
+        | Some (dmn,_) -> fun headVal -> Set.exists (func headVal) dmn
+        | None         -> failwithf "BinaryHeadConstraint:: Node %d does not exist" n
+    function
+    | Eq  x -> constructBinaryHeadConstraint (=)  x
+    | Neq x -> constructBinaryHeadConstraint (<>) x
+    | Sum l ->
+        let dmnChoice =
+            List.map (fun n -> match Map.tryFind n constraintGraph with
+                               | Some (dmn,_) -> dmn
+                               | None -> failwith "naryHeadConstraint ::Node doesn't exist") l
+            |> choiceFromDomains
+        fun headVal -> List.exists (fun l -> List.reduce (+) l |> (=) headVal) dmnChoice
+
+// Function to create a partial pattern match which returns a
+// predicate constraining the tail node in a binary constraint
+let binaryTailConstraint constrainedDomain =
+    function
+    | Eq  x -> ((fun value -> Set.contains value constrainedDomain),x) |> Some
+    | Neq x -> ((fun value -> Set.exists ((<>) value) constrainedDomain),x) |> Some
+    | _     -> None
+
+// Function to create a partial pattern match which returns a
+// predicate constraining the tail nodes of an N-ary constraint.
+let naryTailConstraint constrainedDomain =
+    function
+    | Sum l -> ((fun argLst -> Set.contains (List.reduce (+) argLst) constrainedDomain),l)
+               |> Some
+    | _     -> None
+
+// Returns a list of domains associated with the given nodes
+let ConstrainingDomains graph nodeNums =
+    nodeNums
+    |> List.map (fun n -> Map.find n graph
+                          |> function
+                             | dmn,_ -> dmn)
+
+// Finds nodes that constrain node [nodeNum]
+let constrainingNodes graph nodeNum =
+    let constraintArgs =
+        function
+        | Eq  x
+        | Neq x -> [x]
+        | Sum l -> l
+    match Map.tryFind nodeNum graph with
+    | Some (_,constrs) -> Set.toList constrs
+                          |> List.collect constraintArgs
+    | None -> []
+
+// Adds a constraint to the constraint map of a node
+let addConstraintToNode constr node =
+    match node with
+    | dmn, constrSet -> Set.add constr constrSet
+                        |> fun c -> (dmn , c)
+
+// Sets the domain of the value of a node
+let setDomain graph n domain =
+    match Map.tryFind n graph with
+    | Some (_, constrSet) -> (domain, constrSet)
+    | None                -> (domain, Set.empty)
+    |> (fun node -> Map.add n node graph)
+
+// Builds a ConstraintGraph type from a list of constraints (constrs)
+// and an ordered list of domains for nodes in the graph (nodeDomains)
+// This function returns an Error if the inputs are inconsistent
+// (not enough domains) else it returns and Ok result.
+// - constrs : A list of (int * Constraint) where the int indicates
+//             the node it applies to
+// - nodeDomains: A list of domains for the value of each node. E.g.
+//                The domain of node 6 is nodeDomains.[6]
+// N.B. Nodes are numbered from 0..(length of nodeDomains - 1)
+let constraintGraphBuild constrs nodeDomains =
+    // Check number of nodes is consistent
+    let enoughDomains = [for (n,constr) in constrs do yield n]
+                        |> List.max
+                        |> (>) (List.length nodeDomains)
+
+    // Folder to add a node constraint to a node constraintGraph
+    let foldToMap map (node,constr) =
+        match (Map.tryFind node map) with
+        | Some n -> n
+        | None   -> (Set.empty, Set.empty)
+        |> addConstraintToNode constr
+        |> (fun N -> Map.add node N map)
+
+    // Function to build graph. (Takes unit so we can calculate after
+    // consistency check)
+    // Sorry for double back pipe
+    let buildGraph():ConstraintGraph<'nodeValue> =
+        constrs
+        |> List.fold foldToMap Map.empty
+        |> (fun m -> List.fold2 setDomain m) <|| (List.indexed nodeDomains |> List.unzip)
+
+    // Build graph if inputs are consistent
+    if enoughDomains
+    then buildGraph() |> Ok
+    else Error "Not enough node domains"
+
+// Returns allowable domains for tail nodes based off a predicate representing an N-ary
+// constraint
+let unaryFromNaryConstr domain graph constrPred constrNodes =
+    // Function to take the transpose of a list list
+    let rec listTranspose lst =
+        match lst with
+        | [] -> failwith "huh?"
+        | []::x -> [] 
+        | hd::tl -> (List.map List.head lst) :: listTranspose (List.map List.tail lst)
+
+    // Function to combine a list of allowable domains into a map
+    let mergeDomains nodeLst domains =
+        let folder acc n dmn =
+            match Map.tryFind n acc with
+            | Some oldDomain -> Set.intersect dmn oldDomain //This shouldn't happen?
+            | None           -> dmn
+            |> (fun d -> Map.add n d acc)
+        List.fold2 folder Map.empty nodeLst domains
+
+    constrNodes                         
+    |> ConstrainingDomains graph        // Get domains of tails nodes.
+    |> choiceFromDomains                // Get all choice sets of values for these nodes.
+    |> List.filter constrPred           // Filter out all illegal choice sets.
+    |> listTranspose                    // Get list of leftover (allowable) domains for
+                                        // each node.
+    |> List.map Set.ofList              // Convert these to sets.
+    |> mergeDomains constrNodes         // Create map containing calculated domains.
+
+// Returns the allowable domain for a tail node based off a predicate representing a
+// binary constraint
+let unaryFromBinaryConstr domain graph constrPred constrNode =
+    Map.find constrNode graph
+    |> function
+       | dmn,_ -> (constrNode,  Set.filter constrPred dmn)
+
+// Function to set domain of a node.  This function employs a
+// nodeCheckFunc to update check for a valid solution (e.g. a simple
+// constraint check) and/or update the graph (e.g. an arc consistency
+// check).
+let setDomainAndCheck nodeCheckFunc graphOption n domain =
+    match graphOption with
+    | Some graph ->
+        match Map.tryFind n graph with
+        | Some (oldDomain, constrSet) ->
+            if oldDomain <> domain
+            then Map.add n (Set.intersect oldDomain domain, constrSet) graph
+                |> nodeCheckFunc n
+            else Some graph
+        | None ->
+            failwithf "In setDomainArcConsistent :: Node %d doesn't exist" n
+    | None -> None
+
+let checkNodeConstraints nodeNum graph =
+    let (domain,constrSet) =
+        match Map.tryFind nodeNum graph with
+        | Some (dmn,constrs) -> dmn, constrs
+        | None -> failwithf "checkNodeConstraints:: Node %d doesn't exist" nodeNum
+
+    let getConstraint = headConstraint graph
+
+    match Map.tryFind nodeNum graph with
+    | Some (dmn,constrSet) ->
+        Set.toList constrSet
+        |> List.map getConstraint
+        |> fun predLst -> Set.exists (fun value -> List.forall ((|>) value) predLst) dmn
+        |> function
+        | true  -> Some graph
+        | false -> None
+    | None -> failwithf "checkNodeConstraints:: Node %d does not exist" nodeNum
+
+// Checks arc consistency started at node 'nodeNum'. This checks binary and N-ary
+// constraints.
+let rec makeArcConsistent nodeNum graph =
+    // Combines unary constraints from two domain maps, m1 and m2
+    let intersectDomainMaps m1 m2 =
+        let folder acc n dmn  =
+            match Map.tryFind n acc with
+            | Some domain -> Set.intersect domain dmn
+            | None        -> dmn
+            |> (fun d -> Map.add n d acc)
+        Map.fold folder m1 m2
+
+    // Updates domainMap with unary constraints from domainLst
+    let intersectDomains domainLst domainMap =
+        let folder map (n,dmn) =
+            match Map.tryFind n map with
+            | Some oldDomain -> Set.intersect dmn oldDomain
+            | None           -> dmn
+            |> (fun d -> Map.add n d map)
+        List.fold folder domainMap domainLst
+
+    // Get head node's domain and constraints
+    let (domain,constrSet) =
+        match Map.find nodeNum graph  with
+        | dmn,constrs -> dmn, constrs
+
+    // Complete partial active pattern matches with head node's domain
+    let (|BConstraint|_|),(|NConstraint|_|) =
+        binaryTailConstraint domain, naryTailConstraint domain
+
+    // Split binary and N-ary constraints into two lists
+    let segregateConstraints cSet =
+        let folder (binary,nary) el =
+            match el with
+            | BConstraint constrAndNode -> constrAndNode::binary, nary
+            | NConstraint constrAndNode -> binary, constrAndNode::nary
+            | _                         -> failwith "huh?"
+        Set.fold folder ([],[]) cSet
+
+    constrSet
+    |> segregateConstraints             // Separate binary and N-ary constraints.
+    |> function                         // Get unary constraints.
+        | bLst, nLst ->
+            List.map ((<||) (unaryFromBinaryConstr domain graph)) bLst
+            ,
+            List.map ((<||) (unaryFromNaryConstr domain graph)) nLst
+            |> List.fold intersectDomainMaps Map.empty 
+    ||> intersectDomains                     // Combine into one unary constraint map.
+    |> fun unaryConstraints ->
+        if Map.exists (fun _ dmn -> Set.isEmpty dmn) unaryConstraints
+        then None
+        else unaryConstraints
+             |> Map.fold (setDomainAndCheck makeArcConsistent) (Some graph)
+                                             // Update graph with unary constraints.
+                                             // This recursively call arc constraints.
+                                             // This fold could be improved to reduce
+                                             // superfluous operations?
+
+
+// Splits graph into a list of disconnected graphs so they can be solved independently
+let rec disjointGraphs (constrGraph:ConstraintGraph<'a>):ConstraintGraph<'a> list =
+
+    // Finds all nodes connected to node returning the connected nodes
+    // and a graph with those nodes removed
+    let connectedNodes graph collectedNodes node =
+        let rec connectedNodes' graph collectedNodes nodeLst =
+            match nodeLst with
+            | node::tl ->
+                let constrNodes =
+                    constrainingNodes graph node
+                let newGraph =
+                    Map.remove node graph
+                connectedNodes' newGraph (node::collectedNodes) (constrNodes @ tl)
+            | [] -> (graph, collectedNodes)
+        connectedNodes' graph [] [node]
+
+    // Splits graph returning a list of lists. Each list contains the
+    // nodes in one connected graph
+    let rec splitGraph graph disjointLst =
+        Map.toList graph
+        |> List.map (fun (a,_) -> a)
+        |> function
+           | hd::tl -> connectedNodes graph [] hd
+                       |> function
+                          | newGraph , collectedNodes ->
+                              splitGraph newGraph (collectedNodes::disjointLst)
+           | []     -> disjointLst
+
+    // Mapper to recreate a graph from a list of it's nodes and graph
+    // original graph
+    let selectNodes graph nLst =
+        let folder map n =
+            Map.add n (Map.find n graph) map
+        List.fold folder Map.empty nLst
+
+    // Body of function
+    splitGraph constrGraph [[]]
+    |> List.map (selectNodes constrGraph) 
+
+// Backtracking search with arc consistency check.
+// Only looks for a single solution.
+let backtrackingSearch constraintFuncCheck constraintGraph =
+
+    // Recursive search function.
+    let rec search nodeLst graph =
+
+        // Sets a node's domain to a single value and checks arc
+        // consistency.
+        let setDomainSingleton g n value =
+            setDomainAndCheck constraintFuncCheck (Some g) n (Set.singleton value)
+
+        // Folding function to fold through node's domain.
+        // If state is None then no solution for this node has yet been found.
+        // Else a solution has been found and the result is passed through
+        let folder n tl option value =
+            match option with
+            | None ->
+                setDomainSingleton graph n value
+                |> function
+                   | Some g -> search tl g
+                   | None   -> None
+            | Some _ -> option
+
+        // Fold through domain of current node.
+        // If no more nodes to be explored then return completed graph.
+        match nodeLst with
+        | n::tl -> match Map.find n graph with
+                   | dmn,_ -> Set.fold (folder n tl) None dmn
+        | []    -> Some graph
+
+    // All node numbers in graph
+    let nodes =
+        Map.toList constraintGraph
+        |> List.map (fun (a,b) -> a)
+
+    // Search graph
+    search nodes constraintGraph
